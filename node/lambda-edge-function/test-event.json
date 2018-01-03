@@ -1,0 +1,30 @@
+{
+  "Records": [
+    {
+      "cf": {
+        "request": {
+          "headers": {
+            "host": [
+              {
+                "value": "d123.cf.net",
+                "key": "Host"
+              }
+            ],
+            "authorization": [
+              {
+                "value":"Bearer eyJraWQiOiJzSFprWjhTN3k5ZVwvODg2MEVXeTFMVU1HaGZWUjlGNlNtYzN5N0o0dnRCdz0iLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiI0NTFhM2NlMi05Y2U0LTRlMzAtOWY2ZS1iNzJiOGEzNDE5NGUiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6ImF3cy5jb2duaXRvLnNpZ25pbi51c2VyLmFkbWluIiwiaXNzIjoiaHR0cHM6XC9cL2NvZ25pdG8taWRwLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tXC91cy1lYXN0LTFfalRoQ3NhUGV6IiwiZXhwIjoxNTA1NjYwMTY2LCJpYXQiOjE1MDU2NTY1NjYsInZlcnNpb24iOjIsImp0aSI6ImI1Yzg5MmIyLTE0NDEtNDQ0OS1hYTRiLTdjYmJmNzg3OTMzNiIsImNsaWVudF9pZCI6IjVoN2VkNGRzdmdzdWdyNWwxZ2RsMzJlcGg3IiwidXNlcm5hbWUiOiJqb2UifQ.V5OqX61MA_hZ-DfxkK-dLTfusIde8X_joqzUmDiAnWnaYk5L2jKgEUNKdXjSnIXL7kgSFx1rXWIGQvF2x4CpCJ7D_u_Ux1aEj-GeM1MyYra8EPgDmt0Eu62UUYRtZ0uUi-EtDWImsZ4cfS4jCeMfBniph4I2GKfjgF2NJoSU9KtfWTaAk7XHv4yML6Q8w_iyBGZDmDYjb7vx6vCXJoc5KnAE87T1MBQByLNhdkhgF8_0YAuSJk9E0Gj6sEbdVoF7dsCO3UkcTjuxZCl3pABorhtbI1HQJk91GiK7Ca4Y_UwV2WqM_eW9qaNKFI6y1MgsRP612uLLhENb8BGc28QCNA",
+                "key": "Authorization" 
+              }
+            ]
+          },
+          "clientIp": "2001:cdba::3257:9652",
+          "uri": "/experiment-pixel.jpg",
+          "method": "GET"
+        },
+        "config": {
+          "distributionId": "EXAMPLE"
+        }
+      }
+    }
+  ]
+}

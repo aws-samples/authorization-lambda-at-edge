@@ -1,0 +1,193 @@
+Description: >
+    Lambda at edge function and a custom resource that configures the function
+    You will be billed for the AWS resources used if you create a stack from this template. **NOTICE** Copyright 2017 Amazon.com, Inc. or its affiliates.
+    All Rights Reserved. Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance with the License. A copy of the License is located at
+    http://www.apache.org/licenses/LICENSE-2.0 or in the "license" file accompanying this file. This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and limitations under the License.
+
+Parameters:
+
+  UserPoolId:
+    Type: String
+  PublicBucket:
+    Type: String
+  PublicPrefix:
+    Type: String
+  EdgeAuthFunctionUrl:
+    Type: String
+
+
+Resources:
+
+  UpdateConfigExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - s3:PutObject
+            - s3:PutObjectAcl
+            Resource: 
+            - !Sub 'arn:aws:s3:::${PublicBucket}/*'
+
+  UpdateConfigFunction: 
+    Type: AWS::Lambda::Function
+    Properties: 
+      Handler: index.handler
+      Role: !GetAtt UpdateConfigExecutionRole.Arn
+      Runtime: python3.6
+      Timeout: 60
+      MemorySize: 1536
+      Code: 
+        ZipFile: |
+          import cfnresponse
+          import os
+          import boto3
+          import json
+          from io import BytesIO
+          from urllib.request import urlopen
+          import zipfile
+          from pathlib import Path
+          def handler(event, context):
+            print (str(event))
+            responseData = {}
+            try: 
+              if (event['RequestType'] == 'Create') or (event['RequestType'] == 'Update'):
+                  DestinationBucket = event['ResourceProperties']['DestinationBucket']
+                  DestinationPrefix = event['ResourceProperties']['DestinationPrefix']
+                  UserPoolId = event['ResourceProperties']['UserPoolId']
+                  AWSRegion = event['ResourceProperties']['AWSRegion']
+                  SourceUrl = event['ResourceProperties']['SourceUrl']    
+                  print("get jwks value")
+                  jwksUrl = 'https://cognito-idp.' + AWSRegion + '.amazonaws.com/' + UserPoolId + '/.well-known/jwks.json'
+                  with urlopen(jwksUrl) as httpresponse:
+                      jwks = str( httpresponse.read() )
+                  jwks = jwks.replace('b\'{', '{')
+                  jwks = jwks.replace('}\'', '}')
+                  print("unzip source Zip to local directory")
+                  baseDir = '/tmp/' + DestinationBucket + '/' + DestinationPrefix
+                  print("baseDir=" + baseDir)
+                  with urlopen(SourceUrl) as zipresp:
+                    with zipfile.ZipFile(BytesIO(zipresp.read())) as zfile:
+                      zfile.extractall(baseDir)
+                  print("read index.js")
+                  indexjs = Path(baseDir + 'index.js').read_text()
+                  indexjs = indexjs.replace('##JWKS##', jwks)
+                  indexjs = indexjs.replace('##USERPOOLID##', UserPoolId)
+                  print("save index.js back to disk")
+                  with open(baseDir + 'index.js',"w") as w:
+                      w.write(indexjs)
+                  print("zip up the directory")
+                  zipHandle = zipfile.ZipFile('/tmp/edge-auth.zip', 'w', compression = zipfile.ZIP_DEFLATED)
+                  addDirToZip(zipHandle, baseDir, baseDir)
+                  zipHandle.close()
+                  print("upload to S3")
+                  s3 = boto3.resource('s3')
+                  s3.meta.client.upload_file('/tmp/edge-auth.zip', DestinationBucket, DestinationPrefix+'edge-auth.zip', ExtraArgs={'ACL': 'public-read'} )
+                  responseData['Status'] = 'SUCCESS'
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
+                  print ('SUCCESS')
+              else:
+                  print("SUCCESS - operation not Create or Update, ResponseData=" + str(responseData))
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
+            except Exception as e:
+              responseData['Error'] = str(e)
+              cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID") 
+              print("FAILED ERROR: " + responseData['Error'])
+          def addDirToZip(zipHandle, path, basePath=""):
+              basePath = basePath.rstrip("\\/") + ""
+              basePath = basePath.rstrip("\\/")
+              for root, dirs, files in os.walk(path):
+                  zipHandle.write(os.path.join(root, "."))
+                  for file in files:
+                      filePath = os.path.join(root, file)
+                      inZipPath = filePath.replace(basePath, "", 1).lstrip("\\/")
+                      zipHandle.write(filePath, inZipPath)
+
+
+  UpdateConfigCustom:
+    Type: Custom::UpdateConfigCustom
+    DeletionPolicy: Retain
+    Properties:
+      ServiceToken: !GetAtt UpdateConfigFunction.Arn
+      DestinationBucket: !Ref PublicBucket
+      DestinationPrefix: !Ref PublicPrefix
+      AWSRegion: !Ref "AWS::Region"
+      UserPoolId: !Ref UserPoolId
+      SourceUrl: !Ref EdgeAuthFunctionUrl
+
+  EdgeAuthExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+        - Effect: Allow
+          Principal:
+            Service:
+            - edgelambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+
+
+  EdgeAuthFunction: 
+    Type: AWS::Lambda::Function
+    DependsOn: UpdateConfigCustom
+    DeletionPolicy: Retain
+    Properties: 
+      Handler: index.handler
+      Role: !GetAtt EdgeAuthExecutionRole.Arn
+      Runtime: nodejs6.10
+      Timeout: 1
+      MemorySize: 128
+      Code:
+        S3Bucket: !Ref PublicBucket 
+        S3Key: !Sub ${PublicPrefix}edge-auth.zip
+
+Outputs:
+  EdgeAuthFunction: 
+    Description: Reference to the Lambda function
+    Value: !Ref EdgeAuthFunction
+
+
+
+
+

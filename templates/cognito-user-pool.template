@@ -1,0 +1,126 @@
+Description: >
+    Amazon Cognito User Pool and User Pool Client deployment for Edge Authentication sample stack
+    You will be billed for the AWS resources used if you create a stack from this template. **NOTICE** Copyright 2017 Amazon.com, Inc. or its affiliates.
+    All Rights Reserved. Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance with the License. A copy of the License is located at
+    http://www.apache.org/licenses/LICENSE-2.0 or in the "license" file accompanying this file. This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and limitations under the License.
+
+Parameters:
+
+  BaseUrl:
+    Type: String
+  Environment:
+    Type: String
+
+Resources:
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:*
+            Resource: arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - cognito-idp:CreateUserPool
+            - cognito-idp:CreateUserPoolClient
+            - cognito-idp:CreateUserPoolDomain
+            Resource: 
+            - '*'
+
+
+  CreateUserPoolAndClientFunction: 
+    Type: AWS::Lambda::Function
+    Properties: 
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.6
+      Timeout: 60
+      Code: 
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          def handler(event, context):
+              responseData = {}
+              print (str(event)) 
+              try: 
+                  if event['RequestType'] == 'Create':
+                      Environment = event['ResourceProperties']['Environment']
+                      BaseUrl = event['ResourceProperties']['BaseUrl']                          
+                      client = boto3.client('cognito-idp') 
+                      response = client.create_user_pool(
+                          PoolName=Environment+'-userpool',
+                          AutoVerifiedAttributes=['email'],
+                          Schema=[
+                              {
+                                  'Name': 'email',
+                                  'Required': True
+                              }
+                          ]
+                      )
+                      CreatedUserPoolId = response['UserPool']['Id']
+                      response = client.create_user_pool_client(
+                          UserPoolId=CreatedUserPoolId,
+                          ClientName=Environment + '-client',
+                          ReadAttributes=[
+                              'address', 'birthdate', 'email', 'email_verified', 'family_name', 'gender', 'given_name', 'locale', 'middle_name', 'name', 'nickname', 'phone_number', 'phone_number_verified', 'picture', 'preferred_username', 'profile', 'updated_at', 'website', 'zoneinfo'
+                          ],
+                          WriteAttributes=[
+                              'address', 'birthdate', 'email', 'family_name', 'gender', 'given_name', 'locale', 'middle_name', 'name', 'nickname', 'phone_number', 'picture', 'preferred_username', 'profile', 'updated_at', 'website', 'zoneinfo'
+                          ],
+                          SupportedIdentityProviders=['COGNITO'],
+                          CallbackURLs=['https://' + BaseUrl + '/index.html'],
+                          LogoutURLs=['https://' + BaseUrl + '/index.html'],
+                          AllowedOAuthFlows=['implicit','code'],
+                          AllowedOAuthScopes=['aws.cognito.signin.user.admin','openid'],
+                          AllowedOAuthFlowsUserPoolClient=True
+                      )
+                      CreatedClientId = response['UserPoolClient']['ClientId']
+                      response = client.create_user_pool_domain(
+                          Domain = str(CreatedClientId),
+                          UserPoolId = CreatedUserPoolId
+                      )
+                      responseData['UserPoolId'] = CreatedUserPoolId
+                      responseData['ClientId'] = CreatedClientId
+                      print("SUCCESS, ResponseData=" + str(responseData))
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
+                  else:
+                      print("SUCCESS - operation not Create, ResponseData=" + str(responseData))
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
+              except Exception as e:
+                  responseData['Error'] = str(e)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID") 
+                  print("FAILED ERROR: " + responseData['Error'])
+
+  CreateUserPoolAndClient:
+    Type: Custom::CreateUserPoolAndClient
+    DeletionPolicy: Retain
+    Properties:
+      ServiceToken: !GetAtt CreateUserPoolAndClientFunction.Arn
+      BaseUrl: !Ref BaseUrl
+      Environment: !Ref Environment
+
+
+Outputs:
+  UserPoolId:
+    Description: generated ID for this UserPool
+    Value: !GetAtt CreateUserPoolAndClient.UserPoolId
+  ClientId:
+    Description: Amazon Cognito user pool client ID
+    Value: !GetAtt CreateUserPoolAndClient.ClientId

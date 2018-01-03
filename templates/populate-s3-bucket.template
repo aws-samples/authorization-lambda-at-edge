@@ -1,0 +1,187 @@
+Description: >
+    Copies static content from zip files into S3 buckets.  Writes out JavaScript configuration file.
+    You will be billed for the AWS resources used if you create a stack from this template. **NOTICE** Copyright 2017 Amazon.com, Inc. or its affiliates.
+    All Rights Reserved. Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance with the License. A copy of the License is located at
+    http://www.apache.org/licenses/LICENSE-2.0 or in the "license" file accompanying this file. This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and limitations under the License.
+
+
+Parameters:
+
+  UserPoolId:
+    Type: String
+  ClientId:
+    Type: String
+  BaseUrl:
+    Type: String
+  PublicBucket:
+    Type: String
+  PrivateBucket:
+    Type: String
+  PublicPrefix:
+    Type: String
+  PrivatePrefix:
+    Type: String
+  PrivateContentUrl:
+    Type: String
+  PublicContentUrl:
+    Type: String
+  ConfigFile:
+    Type: String
+
+Resources:
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - s3:PutObject
+            Resource:
+            - !Sub 'arn:aws:s3:::${PublicBucket}/*'
+            - !Sub 'arn:aws:s3:::${PrivateBucket}/*'
+            
+  PopulateS3BucketFunction: 
+    Type: AWS::Lambda::Function
+    Properties: 
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.6
+      Timeout: 60
+      MemorySize: 1536
+      Code: 
+        ZipFile: |
+          from io import BytesIO
+          from urllib.request import urlopen
+          from zipfile import ZipFile
+          import os
+          import boto3
+          import json
+          import cfnresponse
+          def handler(event, context):
+            print (str(event))
+            responseData = {}
+            contenttype = {'html': 'text/html', 'js': 'application/javascript', 'css': 'text/css', 'json':'application/json'}
+            try: 
+              SourceUrl = event['ResourceProperties']['SourceUrl']
+              DestinationBucket = event['ResourceProperties']['DestinationBucket']
+              DestinationPrefix = event['ResourceProperties']['DestinationPrefix']
+              baseDir = '/tmp/' + DestinationBucket + '/' + DestinationPrefix
+              print("baseDir=" + baseDir)
+              with urlopen(SourceUrl) as zipresp:
+                with ZipFile(BytesIO(zipresp.read())) as zfile:
+                  zfile.extractall(baseDir)
+              s3 = boto3.resource('s3')
+              for path, subdirs, files in os.walk(baseDir):
+                for filename in files:
+                  extension = os.path.splitext(filename)[1][1:]
+                  print("extension=" + extension + ", content type=" + contenttype[extension] )
+                  f = os.path.join(path, filename)
+                  print("f=" + f)
+                  key = f.replace(baseDir, "", 1)
+                  print("key=" + key)
+                  s3.meta.client.upload_file(f, DestinationBucket, DestinationPrefix+key, ExtraArgs={ 'ContentType': contenttype[extension] } )
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
+              print ('SUCCESS')
+            except Exception as e:
+              responseData['Error'] = str(e)
+              cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID") 
+              print("FAILED ERROR: " + responseData['Error'])
+ 
+
+  PopulatePublicBucket:
+    Type: Custom::PopulatePublicBucket
+    Properties:
+      ServiceToken: !GetAtt PopulateS3BucketFunction.Arn
+      DestinationBucket: !Ref PublicBucket
+      DestinationPrefix: !Ref PublicPrefix
+      SourceUrl: !Ref PublicContentUrl
+
+  PopulatePrivateBucket:
+    Type: Custom::PopulatePrivateBucket
+    Properties:
+      ServiceToken: !GetAtt PopulateS3BucketFunction.Arn
+      DestinationBucket: !Ref PrivateBucket
+      DestinationPrefix: !Ref PrivatePrefix
+      SourceUrl: !Ref PrivateContentUrl
+
+  WriteConfigFileFunction: 
+    Type: AWS::Lambda::Function
+    Properties: 
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.6
+      Timeout: 30
+      MemorySize: 1536
+      Code: 
+        ZipFile: |
+          from io import BytesIO
+          from urllib.request import urlopen
+          from zipfile import ZipFile
+          import os
+          import boto3
+          import json
+          import cfnresponse
+          def handler(event, context):
+            responseData = {}
+            print (str(event))
+            try: 
+              DestinationBucket = event['ResourceProperties']['DestinationBucket']
+              DestinationPrefix = event['ResourceProperties']['DestinationPrefix']
+              UserPoolId = event['ResourceProperties']['UserPoolId']
+              ClientId = event['ResourceProperties']['ClientId']
+              AWSRegion = event['ResourceProperties']['AWSRegion']
+              BaseUrl = event['ResourceProperties']['BaseUrl']
+              ConfigFile = event['ResourceProperties']['ConfigFile']              
+              config = ""
+              config = config + "var UserPoolId = '" + UserPoolId + "';\n"
+              config = config + "var ClientId = '" + ClientId + "';\n"
+              config = config + "var AWSRegion = '" + AWSRegion + "';\n"  
+              config = config + "var BaseUrl = '" + BaseUrl + "';\n" 
+              print(config)
+              s3 = boto3.client('s3')
+              s3.put_object(Body=config, Bucket=DestinationBucket, Key=DestinationPrefix + ConfigFile, ContentType='application/javascript')
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
+              print ('SUCCESS')
+            except Exception as e:
+              responseData['Error'] = str(e)
+              cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID")
+              print("FAILED ERROR: " + responseData['Error']) 
+
+  WriteConfigFile:
+    Type: Custom::WriteConfigFile
+    DependsOn: PopulatePublicBucket
+    Properties:
+      ServiceToken: !GetAtt WriteConfigFileFunction.Arn
+      DestinationBucket: !Ref PublicBucket
+      DestinationPrefix: !Ref PublicPrefix
+      AWSRegion: !Ref "AWS::Region"
+      UserPoolId: !Ref UserPoolId
+      ClientId: !Ref ClientId
+      BaseUrl: !Ref BaseUrl
+      ConfigFile: !Ref ConfigFile 
+
+
+
+

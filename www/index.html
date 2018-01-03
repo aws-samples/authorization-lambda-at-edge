@@ -1,0 +1,113 @@
+<html>
+<head>
+  <title>Private Content Viewer - Lambda at Edge Authentication Demo</title>
+  <script src="/js/config.js"></script> 
+  <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script> 
+  <style>
+	table, th, td {border: 1px solid black;}
+    table {width: 80%;}
+  </style>
+</head>
+<body onload="getToken()">
+  <h1>Private Content Viewer</h1>
+  <div class="main">
+  Below are contents of /private/top-secret.json file served from private content S3 bucket: 
+  </div>
+  <hr/>
+  <table>
+  	<tr>
+  		<td><div class="jwt">jwt token...</div></td>
+  		<td><button onclick="authenticateWithCognito()">Authenticate with Amazon Cognito</button></td>
+  	</tr>
+  	<tr>
+  		<td><div class="content">private content will be shown here...</div></td>
+  		<td><button onclick="getPrivateData()">Retrieve Private Data</button></td>
+  	</tr>
+  </table>
+
+  <script>
+  	access_token = null;
+  	// *********************************************************************
+	//     retrieve access (JWT) token from URL if it exists
+	// *********************************************************************
+	function getToken() {
+	  	var results = new RegExp('[\?&#]access_token=([^&#]*)').exec(location.href);
+	  	jwtDisplay = null;
+		if(results) {
+	    		access_token = results[1];
+	    		jwtDisplay = '<b>jwt token: ' + access_token.slice(0,30) + '...</b>';
+	    } else {
+	    		access_token = null;
+	    		jwtDisplay = 'jwt token not found';
+	    }
+	    $("div.jwt").html(jwtDisplay);
+		console.log('location.href=' + location.href);
+		console.log('access_token=' + access_token);
+	}
+	
+  	// *********************************************************************
+	//     retrieves private data, using Authorization header
+	// *********************************************************************
+	function getPrivateData() {
+		// using jquery ajax call to add Authorization header with bearer token
+		$.ajax
+		({
+		  type: "GET",
+		  url: "/private/top-secret.json",
+		  dataType: 'json',
+		  beforeSend: function(request) {
+    		request.setRequestHeader("Authorization", 'Bearer ' + access_token);
+  		  },
+		  cache: false,
+		  success: function (data) {
+		    console.log(JSON.stringify(data));
+		    var content = '';
+		    content = content + '<p><h3>PRIVATE CONTENT RETRIEVED</h3></p>';
+		    content = content + '<p><h1>' + data.title + '</h1></p>';
+		    content = content + '<p>' + data.content + '</p>';
+		    $("div.content").html(content);
+		    access_token = null;
+		  },
+	      error: function (jqXHR, exception) {
+	        var msg = '';
+	        if (jqXHR.status === 0) {
+	            msg = 'Not connect.\n Verify Network.';
+	        } else if (jqXHR.status == 401) {
+	            msg = 'Lambda @Edge denied your request. [401]';
+	        } else if (jqXHR.status == 403) {
+	            msg = 'S3 unauthorized request. [403]';
+	        } else if (jqXHR.status == 404) {
+	            msg = 'Requested page not found. [404]';
+	        } else if (jqXHR.status == 500) {
+	            msg = 'Internal Server Error [500].';
+	        } else if (exception === 'parsererror') {
+	            msg = 'Requested JSON parse failed.';
+	        } else if (exception === 'timeout') {
+	            msg = 'Time out error.';
+	        } else if (exception === 'abort') {
+	            msg = 'Ajax request aborted.';
+	        } else {
+	            msg = 'Uncaught Error.\n' + jqXHR.responseText;
+	        }
+	        alert(msg);
+	        access_token = null;
+	        window.location.reload(true);
+	      }
+		});
+	}
+
+  	// *********************************************************************
+	//     redirects to Cognito custom UI login/signup page
+	// *********************************************************************
+	function authenticateWithCognito() {
+		window.location.replace (
+			'https://' + ClientId + 
+			'.auth.' + AWSRegion + '.amazoncognito.com/login?' + 
+			'client_id=' + ClientId +
+			'&response_type=token' +
+			'&redirect_uri=https://' + BaseUrl + '/index.html'		
+		);
+  	}
+  </script>
+</body>
+</html>
