@@ -12,25 +12,25 @@ Parameters:
   ArtifactsBucket:
     Description: S3 bucket with artifact files (Lambda functions, html files, JS code, etc.)
     Type: String
-    Default: atomic-artifacts
+    Default: cloudfront-blog-resources
     AllowedPattern: ^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$
     ConstraintDescription: ArtifactsBucket S3 bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).
   ArtifactsPrefix:
     Description: Path in the S3 bucket containing artifact files
     Type: String
-    Default: edge-auth/
+    Default: authorization-lambda-at-edge/
     AllowedPattern: ^[0-9a-zA-Z-/]*$
     ConstraintDescription: TemplatesPrefix key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).
   TemplatesBucket:
     Description: S3 bucket with CloudFormation templates for nested stacks
     Type: String
-    Default: atomic-templates
+    Default: cloudfront-blog-resources
     AllowedPattern: ^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$
     ConstraintDescription: TemplatesBucket S3 bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).
   TemplatesPrefix:
     Description: Path in the S3 bucket containing CloudFormation templates
     Type: String
-    Default: edge-auth/
+    Default: authorization-lambda-at-edge/
     AllowedPattern: ^[0-9a-zA-Z-/]*$
     ConstraintDescription: TemplatesPrefix key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).
 
