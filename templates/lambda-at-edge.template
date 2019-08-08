@@ -175,7 +175,7 @@ Resources:
     Properties: 
       Handler: index.handler
       Role: !GetAtt EdgeAuthExecutionRole.Arn
-      Runtime: nodejs6.10
+      Runtime: nodejs10.x
       Timeout: 1
       MemorySize: 128
       Code:
