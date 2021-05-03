@@ -11,6 +11,9 @@ Parameters:
     Type: String
   Environment:
     Type: String
+  PermissionBoundaryPolicyArn:
+    Description: ARN to the boundary policy used for roles
+    Type: String
 
 Resources:
 
@@ -41,29 +44,30 @@ Resources:
             - cognito-idp:CreateUserPool
             - cognito-idp:CreateUserPoolClient
             - cognito-idp:CreateUserPoolDomain
-            Resource: 
+            Resource:
             - '*'
+      PermissionsBoundary: !Ref PermissionBoundaryPolicyArn
 
 
-  CreateUserPoolAndClientFunction: 
+  CreateUserPoolAndClientFunction:
     Type: AWS::Lambda::Function
-    Properties: 
+    Properties:
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Runtime: python3.6
       Timeout: 60
-      Code: 
+      Code:
         ZipFile: |
           import boto3
           import cfnresponse
           def handler(event, context):
               responseData = {}
-              print (str(event)) 
-              try: 
+              print (str(event))
+              try:
                   if event['RequestType'] == 'Create':
                       Environment = event['ResourceProperties']['Environment']
-                      BaseUrl = event['ResourceProperties']['BaseUrl']                          
-                      client = boto3.client('cognito-idp') 
+                      BaseUrl = event['ResourceProperties']['BaseUrl']
+                      client = boto3.client('cognito-idp')
                       response = client.create_user_pool(
                           PoolName=Environment+'-userpool',
                           AutoVerifiedAttributes=['email'],
@@ -105,7 +109,7 @@ Resources:
                       cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
               except Exception as e:
                   responseData['Error'] = str(e)
-                  cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID") 
+                  cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID")
                   print("FAILED ERROR: " + responseData['Error'])
 
   CreateUserPoolAndClient:

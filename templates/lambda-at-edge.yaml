@@ -15,6 +15,9 @@ Parameters:
     Type: String
   EdgeAuthFunctionUrl:
     Type: String
+  PermissionBoundaryPolicyArn:
+    Description: ARN to the boundary policy used for roles
+    Type: String
 
 
 Resources:
@@ -47,18 +50,19 @@ Resources:
             Action:
             - s3:PutObject
             - s3:PutObjectAcl
-            Resource: 
+            Resource:
             - !Sub 'arn:aws:s3:::${PublicBucket}/*'
+      PermissionsBoundary: !Ref PermissionBoundaryPolicyArn
 
-  UpdateConfigFunction: 
+  UpdateConfigFunction:
     Type: AWS::Lambda::Function
-    Properties: 
+    Properties:
       Handler: index.handler
       Role: !GetAtt UpdateConfigExecutionRole.Arn
       Runtime: python3.6
       Timeout: 60
       MemorySize: 1536
-      Code: 
+      Code:
         ZipFile: |
           import cfnresponse
           import os
@@ -71,13 +75,13 @@ Resources:
           def handler(event, context):
             print (str(event))
             responseData = {}
-            try: 
+            try:
               if (event['RequestType'] == 'Create') or (event['RequestType'] == 'Update'):
                   DestinationBucket = event['ResourceProperties']['DestinationBucket']
                   DestinationPrefix = event['ResourceProperties']['DestinationPrefix']
                   UserPoolId = event['ResourceProperties']['UserPoolId']
                   AWSRegion = event['ResourceProperties']['AWSRegion']
-                  SourceUrl = event['ResourceProperties']['SourceUrl']    
+                  SourceUrl = event['ResourceProperties']['SourceUrl']
                   print("get jwks value")
                   jwksUrl = 'https://cognito-idp.' + AWSRegion + '.amazonaws.com/' + UserPoolId + '/.well-known/jwks.json'
                   with urlopen(jwksUrl) as httpresponse:
@@ -112,7 +116,7 @@ Resources:
                   cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
             except Exception as e:
               responseData['Error'] = str(e)
-              cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID") 
+              cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID")
               print("FAILED ERROR: " + responseData['Error'])
           def addDirToZip(zipHandle, path, basePath=""):
               basePath = basePath.rstrip("\\/") + ""
@@ -166,28 +170,24 @@ Resources:
             - logs:CreateLogStream
             - logs:PutLogEvents
             Resource: arn:aws:logs:*:*:*
+      PermissionsBoundary: !Ref PermissionBoundaryPolicyArn
 
 
-  EdgeAuthFunction: 
+  EdgeAuthFunction:
     Type: AWS::Lambda::Function
     DependsOn: UpdateConfigCustom
     DeletionPolicy: Retain
-    Properties: 
+    Properties:
       Handler: index.handler
       Role: !GetAtt EdgeAuthExecutionRole.Arn
       Runtime: nodejs10.x
       Timeout: 1
       MemorySize: 128
       Code:
-        S3Bucket: !Ref PublicBucket 
+        S3Bucket: !Ref PublicBucket
         S3Key: !Sub ${PublicPrefix}edge-auth.zip
 
 Outputs:
-  EdgeAuthFunction: 
+  EdgeAuthFunction:
     Description: Reference to the Lambda function
     Value: !Ref EdgeAuthFunction
-
-
-
-
-

@@ -33,9 +33,12 @@ Parameters:
     Default: authorization-lambda-at-edge/
     AllowedPattern: ^[0-9a-zA-Z-/]*$
     ConstraintDescription: TemplatesPrefix key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).
+  PermissionBoundaryPolicyArn:
+    Description: ARN to a boundary policy if your organisation uses some for roles, optional
+    Type: String
+    Default: DefaultPermissionBoundaryPolicy
 
 Resources:
-
 
   CFOriginAccessIdentity:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
@@ -161,6 +164,17 @@ Resources:
                 Forward: none
             ViewerProtocolPolicy: redirect-to-https
 
+  DefaultPermissionBoundaryPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: '*'
+            Resource: '*'
+      PolicyName: DefaultPermissionBoundaryPolicy
+
   CognitoUserPool:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -168,6 +182,7 @@ Resources:
       Parameters:
         BaseUrl:            !GetAtt CFDistribution.DomainName
         Environment:        !Ref AWS::StackName
+        PermissionBoundaryPolicyArn: !Ref PermissionBoundaryPolicyArn
 
   PopulateS3Buckets:
     Type: AWS::CloudFormation::Stack
@@ -184,6 +199,7 @@ Resources:
         PublicContentUrl:   !Sub 'http://${ArtifactsBucket}.s3.amazonaws.com/${ArtifactsPrefix}public.zip'
         PrivateContentUrl:  !Sub 'http://${ArtifactsBucket}.s3.amazonaws.com/${ArtifactsPrefix}private.zip'
         ConfigFile:         'js/config.js'
+        PermissionBoundaryPolicyArn: !Ref PermissionBoundaryPolicyArn
 
   LambdaAtEdge:
     Type: AWS::CloudFormation::Stack
@@ -194,6 +210,7 @@ Resources:
         PublicBucket:   !Ref S3BucketPublic
         PublicPrefix:   'lambda-at-edge/'
         EdgeAuthFunctionUrl:  !Sub 'http://${ArtifactsBucket}.s3.amazonaws.com/${ArtifactsPrefix}edge-auth.zip'
+        PermissionBoundaryPolicyArn: !Ref PermissionBoundaryPolicyArn
 
 
 Outputs:
