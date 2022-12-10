@@ -67,7 +67,7 @@ Resources:
     Properties: 
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      Runtime: python3.6
+      Runtime: python3.9
       Timeout: 60
       MemorySize: 1536
       Code: 
@@ -131,7 +131,7 @@ Resources:
     Properties: 
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      Runtime: python3.6
+      Runtime: python3.9
       Timeout: 30
       MemorySize: 1536
       Code: 
