@@ -55,7 +55,7 @@ Resources:
     Properties: 
       Handler: index.handler
       Role: !GetAtt UpdateConfigExecutionRole.Arn
-      Runtime: python3.6
+      Runtime: python3.9
       Timeout: 60
       MemorySize: 1536
       Code: 
@@ -175,7 +175,7 @@ Resources:
     Properties: 
       Handler: index.handler
       Role: !GetAtt EdgeAuthExecutionRole.Arn
-      Runtime: nodejs14.x
+      Runtime: nodejs16.x
       Timeout: 1
       MemorySize: 128
       Code:
